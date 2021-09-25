@@ -46,15 +46,14 @@ set(KDTree_VERSION 1.0.0)
 
 find_path(KDTree_INCLUDE_DIR
         NAMES KDTree.h
-        PATHS KDTree
+        PATHS ${CMAKE_CURRENT_LIST_DIR}
         PATH_SUFFIXES include
         NO_DEFAULT_PATH
         )
 
 find_package_handle_standard_args(KDTree DEFAULT_MSG
-        FOUND_VAR KDTree_FOUND
-        REQUIRED_VARS KDTree_INCLUDE_DIR
-        VERSION_VAR KDTree_VERSION
+        KDTree_INCLUDE_DIR
+        KDTree_VERSION
         )
 
 if (KDTree_FOUND AND NOT TARGET KDTree::KDTree)
