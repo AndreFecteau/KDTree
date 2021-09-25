@@ -20,7 +20,7 @@ namespace KDTree {
 ///          - Does not check for duplicates, expect unique points.
 /// \tparam PointType the point type that the container will use.
 /// \tparam NumVerticesInLeaf The number of points per leaf.
-template<typename PointType=Point2D, size_t NumVerticesInLeaf = 20>
+template<typename PointType = Point2D<double>, typename CoordinateType = double, size_t NumVerticesInLeaf = 20>
 class KDTree
 {
 public:
@@ -56,38 +56,45 @@ public:
     void emplace(Args&& ... args);
 
 private:
-    std::unique_ptr<KDTreeNode<PointType, NumVerticesInLeaf>> leaf_; ///< initial leaf node containing all the points.
+    std::unique_ptr<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>> leaf_; ///< initial leaf node containing all the points.
 };
 
 
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 template<typename IterablePointStorage>
-inline KDTree<PointType, NumVerticesInLeaf>::KDTree(const IterablePointStorage& points)
+inline KDTree<PointType, CoordinateType,
+        NumVerticesInLeaf>::KDTree(const IterablePointStorage& points)
 {
     PointType min(std::numeric_limits<double>::max(), std::numeric_limits<double>::max());
     PointType max(std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest());
     PointType extent(0, 0);
     for (auto& point : points)
     {
-        getX(min) = std::min(getX(min), getX(point));
-        getY(min) = std::min(getY(min), getY(point));
-        getX(max) = std::max(getX(max), getX(point));
-        getY(max) = std::max(getY(max), getY(point));
+        Access<PointType, CoordinateType, 0>::get(min) = std::min(Access<PointType, CoordinateType, 0>::get(min),
+                                                                  Access<PointType, CoordinateType, 0>::get(point));
+        Access<PointType, CoordinateType, 1>::get(min) = std::min(Access<PointType, CoordinateType, 1>::get(min),
+                                                                  Access<PointType, CoordinateType, 1>::get(point));
+        Access<PointType, CoordinateType, 0>::get(max) = std::max(Access<PointType, CoordinateType, 0>::get(max),
+                                                                  Access<PointType, CoordinateType, 0>::get(point));
+        Access<PointType, CoordinateType, 1>::get(max) = std::max(Access<PointType, CoordinateType, 1>::get(max),
+                                                                  Access<PointType, CoordinateType, 1>::get(point));
     }
-    extent.x() = (getX(max) - getX(min)) * 1.1;
-    extent.y() = (getY(max) - getY(min)) * 1.1;
-    leaf_ = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>(min,
-                                                                       extent,
-                                                                       NODESPLIT::X);
+    extent.x() =
+            (Access<PointType, CoordinateType, 0>::get(max) - Access<PointType, CoordinateType, 0>::get(min)) * 1.1;
+    extent.y() =
+            (Access<PointType, CoordinateType, 1>::get(max) - Access<PointType, CoordinateType, 1>::get(min)) * 1.1;
+    leaf_ = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>(min,
+                                                                                       extent,
+                                                                                       NODESPLIT::X);
     for (const auto& point : points)
     {
         leaf_->emplace(point);
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 template<typename T>
-inline PointType KDTree<PointType, NumVerticesInLeaf>::getClosestPoint(const T& point) const
+inline PointType KDTree<PointType, CoordinateType, NumVerticesInLeaf>::getClosestPoint(const T& point) const
 {
     assert(leaf_ && "getClosestPoint requires at least one point in the KDTree.");
     PointType closestPoint;
@@ -96,32 +103,33 @@ inline PointType KDTree<PointType, NumVerticesInLeaf>::getClosestPoint(const T& 
     return closestPoint;
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline size_t KDTree<PointType, NumVerticesInLeaf>::size()
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline size_t KDTree<PointType, CoordinateType, NumVerticesInLeaf>::size()
 {
     if (!leaf_)
     { return 0; }
     return leaf_->size();
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-void KDTree<PointType, NumVerticesInLeaf>::emplace(PointType&& point)
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+void KDTree<PointType, CoordinateType, NumVerticesInLeaf>::emplace(PointType&& point)
 {
     if (!leaf_)
     {
-        leaf_ = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>();
+        leaf_ = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>();
     }
     while (!leaf_->isPointInCurrentDomain(point))
     {
-        leaf_ = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>(std::move(leaf_),
-                                                                           leaf_->createParentLeaf(point));
+        leaf_ = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>(std::move(leaf_),
+                                                                                           leaf_->createParentLeaf(
+                                                                                                   point));
     }
     leaf_->emplace(std::forward<PointType>(point));
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 template<class... Args>
-inline void KDTree<PointType, NumVerticesInLeaf>::emplace(Args&& ... args)
+inline void KDTree<PointType, CoordinateType, NumVerticesInLeaf>::emplace(Args&& ... args)
 {
     emplace(PointType(args ...));
 }

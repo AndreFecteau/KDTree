@@ -25,9 +25,11 @@ enum class NODESPLIT
 ///          - Does not check for duplicates, expect unique points.
 /// \tparam PointType the point type that the container will use.
 /// \tparam NumVerticesInLeaf The number of points per leaf.
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 class KDTreeNode
 {
+    using AccessX = Access<PointType, CoordinateType, 0>;
+    using AccessY = Access<PointType, CoordinateType, 1>;
 public:
 
     /// \brief Default constructor
@@ -42,7 +44,9 @@ public:
     /// \param min The minimum value of the leaf.
     /// \param extent The size of the leaf.
     /// \param split the direction the leaf is split for the children leafs.
-    KDTreeNode(Point2D min, Point2D extent, NODESPLIT split) : min_(min), extent_(extent), split_(split) {}
+    KDTreeNode(Point2D <CoordinateType> min, Point2D <CoordinateType> extent, NODESPLIT split) : min_(min),
+                                                                                                 extent_(extent),
+                                                                                                 split_(split) {}
 
     /// \brief Create a Parent leaf to contain the given point. This can create parents leafs recursively.
     /// \param point The point you want to insert into the domain that is out of the current domain.
@@ -73,13 +77,13 @@ public:
     void emplace(T&& point);
 
 protected:
-    std::array<std::unique_ptr<KDTreeNode<PointType, NumVerticesInLeaf>>, 2> leafs_;
+    std::array<std::unique_ptr<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>, 2> leafs_;
     std::array<PointType, NumVerticesInLeaf> points_;
     size_t numPoints_ = 0;
     std::optional<NODESPLIT> split_;
     std::optional<double> splitLocation_;
-    std::optional<Point2D> min_;
-    std::optional<Point2D> extent_;
+    std::optional<Point2D < CoordinateType>> min_;
+    std::optional<Point2D < CoordinateType>> extent_;
 
     /// \brief Create children leafs and add the points into the children.
     void createLeafs();
@@ -93,9 +97,9 @@ protected:
 };
 
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline KDTreeNode<PointType, NumVerticesInLeaf>::KDTreeNode(std::unique_ptr<KDTreeNode>&& one,
-                                                            std::unique_ptr<KDTreeNode>&& two)
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::KDTreeNode(std::unique_ptr<KDTreeNode>&& one,
+                                                                            std::unique_ptr<KDTreeNode>&& two)
 {
     numPoints_ = one->numPoints_ + two->numPoints_;
     if (*one->split_ == NODESPLIT::X)
@@ -145,65 +149,66 @@ inline KDTreeNode<PointType, NumVerticesInLeaf>::KDTreeNode(std::unique_ptr<KDTr
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline std::unique_ptr<KDTreeNode<PointType, NumVerticesInLeaf>>
-KDTreeNode<PointType, NumVerticesInLeaf>::createParentLeaf(const PointType& point)
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline std::unique_ptr<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>
+KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::createParentLeaf(const PointType& point)
 {
     if (*split_ == NODESPLIT::X)
     {
         Point2D min = *min_;
-        if (getY(point) > min_->y())
+        if (AccessY::get(point) > min_->y())
         {
-            getY(min) += extent_->y();
+            min.y() += extent_->y();
         }
         else
         {
-            getY(min) -= extent_->y();
+            min.y() -= extent_->y();
         }
         return std::make_unique<KDTreeNode>(min, *extent_, NODESPLIT::X);
     }
     else
     {
         Point2D min = *min_;
-        if (getX(point) > min_->x())
+        if (AccessX::get(point) > min_->x())
         {
-            getX(min) += extent_->x();
+            min.x() += extent_->x();
         }
         else
         {
-            getX(min) -= extent_->x();
+            min.x() -= extent_->x();
         }
         return std::make_unique<KDTreeNode>(min, *extent_, NODESPLIT::Y);
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline bool KDTreeNode<PointType, NumVerticesInLeaf>::isPointInCurrentDomain(const PointType& point)
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline bool KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::isPointInCurrentDomain(const PointType& point)
 {
     if (!min_)
     {
         return true;
     }
-    return !(getX(point) < min_->x() || getY(point) < min_->y() || getX(point) >= min_->x() + extent_->x() ||
-             getY(point) >= min_->y() + extent_->y());
+    return !(AccessX::get(point) < min_->x() || AccessY::get(point) < min_->y() ||
+             AccessX::get(point) >= min_->x() + extent_->x() ||
+             AccessY::get(point) >= min_->y() + extent_->y());
 
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline void KDTreeNode<PointType, NumVerticesInLeaf>::initializeContainerDomainToFitAllPoints()
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline void KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::initializeContainerDomainToFitAllPoints()
 {
-    Point2D min(std::numeric_limits<double>::max(), std::numeric_limits<double>::max());
-    Point2D max(std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest());
-    Point2D extent(0, 0);
+    Point2D<CoordinateType> min(AccessX::get(points_.front()), AccessY::get(points_.front()));
+    Point2D<CoordinateType> max(AccessX::get(points_.front()), AccessY::get(points_.front()));
+    Point2D<CoordinateType> extent(0, 0);
     for (auto& point : points_)
     {
-        getX(min) = std::min(getX(min), getX(point));
-        getY(min) = std::min(getY(min), getY(point));
-        getX(max) = std::max(getX(max), getX(point));
-        getY(max) = std::max(getY(max), getY(point));
+        min.x() = std::min(min.x(), AccessX::get(point));
+        min.y() = std::min(min.y(), AccessY::get(point));
+        max.x() = std::max(max.x(), AccessX::get(point));
+        max.y() = std::max(max.y(), AccessY::get(point));
     }
-    extent.x() = getX(max) - getX(min);
-    extent.y() = getY(max) - getY(min);
+    extent.x() = max.x() - min.x();
+    extent.y() = max.y() - min.y();
     extent.x() = std::max(extent.x() * 1.1, extent.y() * 1.1);
     extent.y() = extent.x();
     min_ = min;
@@ -211,9 +216,9 @@ inline void KDTreeNode<PointType, NumVerticesInLeaf>::initializeContainerDomainT
     split_ = NODESPLIT::X;
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 template<typename T>
-inline void KDTreeNode<PointType, NumVerticesInLeaf>::emplace(T&& point)
+inline void KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::emplace(T&& point)
 {
     if (!splitLocation_ && numPoints_ < points_.size())
     {
@@ -238,33 +243,39 @@ inline void KDTreeNode<PointType, NumVerticesInLeaf>::emplace(T&& point)
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 template<typename T>
-inline void KDTreeNode<PointType, NumVerticesInLeaf>::getClosestPoint(PointType& closestPoint, const T& point) const
+inline void
+KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::getClosestPoint(PointType& closestPoint, const T& point) const
 {
     if (splitLocation_)
     {
         size_t leafIndex = getLeafIndex(point);
         leafs_[leafIndex]->getClosestPoint(closestPoint, point);
-        double distSquared = (getX(point) - getX(closestPoint)) * (getX(point) - getX(closestPoint)) +
-                             (getY(point) - getY(closestPoint)) * (getY(point) - getY(closestPoint));
+        double distSquared = (AccessX::get(point) - AccessX::get(closestPoint)) *
+                             (AccessX::get(point) - AccessX::get(closestPoint)) +
+                             (AccessY::get(point) - AccessY::get(closestPoint)) *
+                             (AccessY::get(point) - AccessY::get(closestPoint));
         if ((*split_ == NODESPLIT::X &&
-             distSquared >= (getX(point) - *splitLocation_) * (getX(point) - *splitLocation_)) ||
+             distSquared >= (AccessX::get(point) - *splitLocation_) * (AccessX::get(point) - *splitLocation_)) ||
             (*split_ == NODESPLIT::Y &&
-             distSquared >= (getY(point) - *splitLocation_) * (getY(point) - *splitLocation_)))
+             distSquared >= (AccessY::get(point) - *splitLocation_) * (AccessY::get(point) - *splitLocation_)))
         {
             leafs_[1 - leafIndex]->getClosestPoint(closestPoint, point);
         }
     }
     else
     {
-        double distSquared = (getX(point) - getX(closestPoint)) * (getX(point) - getX(closestPoint)) +
-                             (getY(point) - getY(closestPoint)) * (getY(point) - getY(closestPoint));
+        double distSquared = (AccessX::get(point) - AccessX::get(closestPoint)) *
+                             (AccessX::get(point) - AccessX::get(closestPoint)) +
+                             (AccessY::get(point) - AccessY::get(closestPoint)) *
+                             (AccessY::get(point) - AccessY::get(closestPoint));
         for (size_t i = 0; i < numPoints_; ++i)
         {
             const auto& p = points_[i];
-            double distanceToPointSquared = (getX(point) - p.x()) * (getX(point) - p.x()) +
-                                            (getY(point) - p.y()) * (getY(point) - p.y());
+            double distanceToPointSquared =
+                    (AccessX::get(point) - AccessX::get(p)) * (AccessX::get(point) - AccessX::get(p)) +
+                    (AccessY::get(point) - AccessY::get(p)) * (AccessY::get(point) - AccessY::get(p));
             if (distanceToPointSquared < distSquared)
             {
                 distSquared = distanceToPointSquared;
@@ -274,8 +285,8 @@ inline void KDTreeNode<PointType, NumVerticesInLeaf>::getClosestPoint(PointType&
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline void KDTreeNode<PointType, NumVerticesInLeaf>::createLeafs()
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline void KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::createLeafs()
 {
     double mid = 0;
 
@@ -290,40 +301,43 @@ inline void KDTreeNode<PointType, NumVerticesInLeaf>::createLeafs()
     splitLocation_ = mid;
     if (*split_ == NODESPLIT::X)
     {
-        leafs_[0] = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>(*min_, Point2D((mid - min_->x()),
-                                                                                              extent_->y()),
-                                                                               NODESPLIT::Y);
-        leafs_[1] = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>(
+        leafs_[0] = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>(*min_, Point2D((mid -
+                                                                                                               min_->x()),
+                                                                                                              extent_->y()),
+                                                                                               NODESPLIT::Y);
+        leafs_[1] = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>(
                 Point2D(min_->x() + (mid - min_->x()), min_->y()),
                 Point2D(extent_->x() - (mid - min_->x()), extent_->y()), NODESPLIT::Y);
     }
     else
     {
-        leafs_[0] = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>(*min_, Point2D(extent_->x(),
-                                                                                              (mid - min_->y())),
-                                                                               NODESPLIT::X);
-        leafs_[1] = std::make_unique<KDTreeNode<PointType, NumVerticesInLeaf>>(
+        leafs_[0] = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>(*min_,
+                                                                                               Point2D(extent_->x(),
+                                                                                                       (mid -
+                                                                                                        min_->y())),
+                                                                                               NODESPLIT::X);
+        leafs_[1] = std::make_unique<KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>>(
                 Point2D(min_->x(), min_->y() + (mid - min_->y())),
                 Point2D(extent_->x(), extent_->y() - (mid - min_->y())), NODESPLIT::X);
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
-inline size_t KDTreeNode<PointType, NumVerticesInLeaf>::getLeafIndex(const PointType& point) const
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
+inline size_t KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::getLeafIndex(const PointType& point) const
 {
     if (*split_ == NODESPLIT::X)
     {
-        return static_cast<size_t>(getX(point) > *splitLocation_);
+        return static_cast<size_t>(AccessX::get(point) > *splitLocation_);
     }
     else
     {
-        return static_cast<size_t>(getY(point) > *splitLocation_);
+        return static_cast<size_t>(AccessY::get(point) > *splitLocation_);
     }
 }
 
-template<typename PointType, size_t NumVerticesInLeaf>
+template<typename PointType, typename CoordinateType, size_t NumVerticesInLeaf>
 template<typename T>
-inline void KDTreeNode<PointType, NumVerticesInLeaf>::emplaceInChildLeaf(T&& point)
+inline void KDTreeNode<PointType, CoordinateType, NumVerticesInLeaf>::emplaceInChildLeaf(T&& point)
 {
     size_t i = getLeafIndex(point);
     if (!splitLocation_)
